@@ -18,7 +18,7 @@ const MapTracker = () => {
 
   const fetchLocations = async () => {
     try {
-      const res = await axios.get('https://trackeazy-backend-gk2v.vercel.app/get-sheet-data');
+      const res = await axios.get('https://trackeazy-backend-kse1.vercel.app/get-sheet-data');
       const data = res.data;
 
       const cleaned = data
