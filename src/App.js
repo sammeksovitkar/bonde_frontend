@@ -5,103 +5,14 @@ import TrackingPage from './TrackingPage';
 const App = () => {
   const [admin, setAdmin] = useState(null);
 
-  const fetchLocations = async () => {
-    try {
-      const res = await axios.get('https://trackeazy-backend-gk2v.vercel.app/get-sheet-data');
-      const data = res.data;
-
-      const cleaned = data
-        .map((item) => {
-          const lat = parseFloat(item?.latlong?.lat);
-          const lng = parseFloat(item?.latlong?.long);
-          return !isNaN(lat) && !isNaN(lng) ? [lat, lng] : null;
-        })
-        .filter(Boolean);
-
-      if (cleaned.length > 0) {
-        setPositions(cleaned);
-      } else {
-        setPositions([]);
-      }
-    } catch (error) {
-      console.error('❌ Failed to fetch locations:', error.message);
-    }
+  const handleLoginSuccess = (adminData) => {
+    setAdmin(adminData); // adminData includes token
   };
 
-  const clearData = async () => {
-    try {
-      setLoading(true);
-      await axios.get('https://trackeazy-backend-gk2v.vercel.app/clear-data');
-      setPositions([]);
-      alert("✅ Location data cleared!");
-    } catch (error) {
-      console.error('❌ Failed to clear data:', error.message);
-      alert("❌ Failed to clear data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLocations();
-    const interval = setInterval(fetchLocations, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const first = positions[0];
-  const latest = positions[positions.length - 1];
-
-  return (
-    <div style={{ height: '100vh', position: 'relative' }}>
-      <button
-        onClick={clearData}
-        disabled={loading}
-        style={{
-          position: 'absolute',
-          top: 10,
-          left: 10,
-          zIndex: 1000,
-          padding: '10px 16px',
-          backgroundColor: '#f44336',
-          color: 'white',
-          border: 'none',
-          borderRadius: 6,
-          cursor: 'pointer',
-        }}
-      >
-        {loading ? 'Clearing...' : 'Clear Data'}
-      </button>
-
-      {positions.length === 0 ? (
-        <p style={{ textAlign: 'center', marginTop: 60 }}>📍 Loading map or no data...</p>
-      ) : (
-        <MapContainer center={first} zoom={18} scrollWheelZoom={true} style={{ height: '100%' }}>
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; OpenStreetMap contributors"
-          />
-
-          {/* Start Marker */}
-          <Marker position={first}>
-            <Popup>
-              🟢 Start Point<br />
-              Lat: {first[0]} <br />Lng: {first[1]}
-            </Popup>
-          </Marker>
-
-          {/* End Marker */}
-          <Marker position={latest}>
-            <Popup>
-              🔴 End Point<br />
-              Lat: {latest[0]} <br />Lng: {latest[1]}
-            </Popup>
-          </Marker>
-
-          {/* Route */}
-          <Polyline positions={positions} color="blue" />
-        </MapContainer>
-      )}
-    </div>
+  return admin ? (
+    <TrackingPage token={admin.token} />
+  ) : (
+    <LoginScreen onLoginSuccess={handleLoginSuccess} />
   );
 };
 
