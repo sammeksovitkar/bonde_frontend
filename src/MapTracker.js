@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
-import LoginScreen from './component/LoginScreen';
-import TrackingPage from './TrackingPage';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-const App = () => {
-  const [admin, setAdmin] = useState(null);
+// Fix Leaflet marker icons
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+  iconUrl: require('leaflet/dist/images/marker-icon.png'),
+  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+});
+
+const MapTracker = () => {
+  const [positions, setPositions] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const fetchLocations = async () => {
     try {
-      const res = await axios.get('https://trackeazy-backend-gk2v.vercel.app/get-sheet-data');
+      const res = await axios.get('https://trackeazy-backend-kse1.vercel.app/get-sheet-data');
       const data = res.data;
 
       const cleaned = data
@@ -105,4 +116,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default MapTracker;
