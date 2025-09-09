@@ -64,33 +64,44 @@ const TrackingPage = ({ token }) => {
     }
   };
 
-  const fetchAndSetLocation = async (vehicleNo, isHistory) => {
-    try {
-      setLoading(true);
-      const endpoint = isHistory
-        ? `https://final-backend-trackeazy.vercel.app/api/location/history/${vehicleNo}`
-        : `https://final-backend-trackeazy.vercel.app/api/location/current/${vehicleNo}`;
-      const res = await axios.get(endpoint);
-      const locations = res.data;
+const fetchAndSetLocation = async (vehicleNo, isHistory) => {
+  console.log(vehicleNo, "vehicle No");
+  try {
+    setLoading(true);
+    const endpoint = `https://final-backend-trackeazy.vercel.app/api/auth/getVehicleLocations/${vehicleNo}`;
+    const res = await axios.get(endpoint);
+    const locations = res.data;
 
-      if (isHistory) {
-        const path = locations.map(loc => [loc.lat, loc.lng]);
-        setPathCoords(path);
-        setLatestCoords(path[path.length - 1]);
-      } else {
-        const loc = locations;
-        setLatestCoords([loc.lat, loc.lng]);
-        setPathCoords([]);
-      }
+    const path = locations.locations
+      .map(loc => loc.latlong?.lat && loc.latlong?.long
+        ? [parseFloat(loc.latlong.lat), parseFloat(loc.latlong.long)]
+        : null)
+      .filter(Boolean);
 
-      setLocationName(vehicleNo);
-      setLatestLocation(locations[locations.length - 1] || locations);
+    if (path.length === 0) {
+      setPathCoords([]);
+      setLatestCoords(null);
       setLoading(false);
-    } catch (err) {
-      console.error(err);
-      setLoading(false);
+      return;
     }
-  };
+
+    if (isHistory) {
+      setPathCoords(path);
+      setLatestCoords(path[path.length - 1]);
+    } else {
+      setPathCoords([]);
+      setLatestCoords(path[path.length - 1]);
+    }
+
+    setLocationName(vehicleNo);
+    setLatestLocation(locations[locations.length - 1] || locations);
+    setLoading(false);
+  } catch (err) {
+    console.error(err);
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     fetchDrivers();
@@ -107,6 +118,7 @@ const TrackingPage = ({ token }) => {
         drivers={drivers}
         fetchAndSetLocation={fetchAndSetLocation}
         loading={loading}
+        fetchDrivers={fetchDrivers}
       />
       <div style={{ flex: 1 }}>
         <MapSection

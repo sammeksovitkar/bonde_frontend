@@ -1,3 +1,4 @@
+
 .App {
   text-align: center;
 }
@@ -47,3 +48,10 @@
   text-align: center;
 }
 
+/* Add in your global CSS */
+.ant-modal-root {
+  z-index: 9999 !important;
+}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
