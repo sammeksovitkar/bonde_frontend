@@ -96,19 +96,66 @@ const Dashboard = () => {
         return (
           <>
             {/* Banner Section */}
-            <div className="relative bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl p-10 mb-10 text-white shadow-xl overflow-hidden">
-                <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=2670&auto=format&fit=crop")' }}></div>
-                <div className="relative z-10">
-                    <h1 className="text-5xl font-extrabold mb-2 leading-tight">Welcome to Swaraj Study Point</h1>
-                    <p className="text-xl font-light mb-6">Manage your students and sit slots with ease.</p>
-                    <button
-                        onClick={handleAdd}
-                        className="bg-white text-blue-600 font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-100 transition duration-300 transform hover:scale-105"
-                    >
-                        <UserPlusIcon className="inline-block mr-2" /> Add a New Student
-                    </button>
-                </div>
-            </div>
+            {/* Banner Section */}
+<div className="relative bg-gradient-to-r from-purple-700 via-blue-700 to-indigo-700 rounded-2xl p-10 mb-10 text-white shadow-2xl overflow-hidden">
+  {/* Background image with blur + overlay */}
+  <div
+    className="absolute inset-0 bg-cover bg-center opacity-30 blur-sm"
+    style={{
+      backgroundImage:
+        'url("https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=2670&auto=format&fit=crop")',
+    }}
+  ></div>
+  <div className="absolute inset-0 bg-gradient-to-r from-purple-900/60 to-blue-900/60"></div>
+
+  {/* Main content */}
+  <div className="relative z-10">
+    <h1 className="text-5xl font-extrabold mb-4 leading-tight drop-shadow-lg">
+      Swarajya Abhyasika - The Study Point
+    </h1>
+    <p className="text-lg sm:text-xl font-light mb-6 max-w-3xl drop-shadow-md">
+      Above Dheeraj Infotech, Behind Darji Foundation, Near Khwajamia Dargah,
+      Jalgaon 425 001.
+    </p>
+
+    <button
+      onClick={handleAdd}
+      className="bg-white text-blue-700 font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-100 transition duration-300 transform hover:scale-105"
+    >
+      <UserPlusIcon className="inline-block mr-2" /> Add a New Student
+    </button>
+  </div>
+
+  {/* Floating Contact Card */}
+  <div className="absolute bottom-6 right-6 z-10">
+    <div className="bg-white/90 backdrop-blur-md text-gray-900 rounded-xl shadow-lg p-4 w-64 border border-gray-200">
+      <h3 className="text-lg font-semibold text-blue-700 mb-3">
+        Contact Us
+      </h3>
+      <div className="space-y-2 text-sm">
+        <p className="flex justify-between">
+          <span className="font-medium">Om Bonde</span>
+          <a
+            href="tel:8177832083"
+            className="text-blue-600 hover:underline"
+          >
+            8177832083
+          </a>
+        </p>
+        <p className="flex justify-between">
+          <span className="font-medium">Hemant Bonde</span>
+          <a
+            href="tel:8669176066"
+            className="text-blue-600 hover:underline"
+          >
+            8669176066
+          </a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
 
             {/* Main Content Sections */}
             <div className="space-y-12">
@@ -178,7 +225,7 @@ const Dashboard = () => {
     <div className="flex min-h-screen bg-gray-100 font-sans">
       {/* Sidebar */}
       <aside className="w-64 bg-gray-900 text-white p-6 shadow-lg flex flex-col">
-        <div className="text-2xl font-extrabold mb-8 text-blue-400">Swaraj Study Point</div>
+        <div className="text-2xl font-extrabold mb-8 text-blue-400">Swarajya Study Point</div>
         <nav className="space-y-2">
           <div
             onClick={() => setCurrentPage('dashboard')}
