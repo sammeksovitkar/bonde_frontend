@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'sheetjs-style'; // Use sheetjs-style for styling
 
 // Self-contained components and functions to resolve import errors
 const FaArrowLeft = () => <span>⬅️</span>;
@@ -15,8 +15,6 @@ const FaDollarSign = () => <span>💲</span>;
 const FaCalendarAlt = () => <span>📅</span>;
 const FaCheck = () => <span>✅</span>;
 const FaTimes = () => <span>❌</span>;
-
-// Import icons for edit and delete actions
 const FaEdit = () => <span>✏️</span>;
 const FaTrashAlt = () => <span>🗑️</span>;
 
@@ -351,13 +349,31 @@ const StudentTable = ({ students, fetchStudents, setEditingStudent, setModalVisi
   );
 };
 
-// Simple in-memory export function
+// ** UPDATED exportToExcel function **
+// NOTE: This function requires the 'sheetjs-style' library, not 'xlsx'.
+// To use, run `npm install sheetjs-style`.
 const exportToExcel = (data, fileName, selectedMonth, selectedYear) => {
   if (!data || data.length === 0) {
     console.log("No data to export.");
     return;
   }
 
+  const worksheet = XLSX.utils.json_to_sheet([]);
+  
+  // 1. Add the centered title at the top
+  const title = `Student Fee Details for ${selectedMonth.charAt(0).toUpperCase() + selectedMonth.slice(1)} ${selectedYear}`;
+  XLSX.utils.sheet_add_aoa(worksheet, [[title]], { origin: "A1" });
+  
+  // Define the style for the title cell (A1)
+  const titleCell = worksheet["A1"];
+  if (titleCell) {
+    titleCell.s = {
+      font: { bold: true, sz: 14 }, 
+      alignment: { horizontal: "center", vertical: "center" },
+    };
+  }
+
+  // 2. Add headers and data starting from the third row (A3)
   const excelData = data.map(student => ({
     "Sit No": student.sitNo,
     "Name": student.name,
@@ -369,9 +385,16 @@ const exportToExcel = (data, fileName, selectedMonth, selectedYear) => {
               : 'N/A'
   }));
 
-  const worksheet = XLSX.utils.json_to_sheet(excelData);
-  const title = [[`Student Fee Details for ${selectedMonth.charAt(0).toUpperCase() + selectedMonth.slice(1)} ${selectedYear}`]];
-  XLSX.utils.sheet_add_aoa(worksheet, title, { origin: 'A1' });
+  const headers = Object.keys(excelData[0]);
+  XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: "A3" });
+  XLSX.utils.sheet_add_json(worksheet, excelData, { origin: "A4", skipHeader: true });
+
+  // 3. Merge cells for the title
+  const lastCol = String.fromCharCode('A'.charCodeAt(0) + headers.length - 1);
+  if (!worksheet['!merges']) worksheet['!merges'] = [];
+  worksheet['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } });
+
+  // 4. Set column widths
   worksheet['!cols'] = [
     { wch: 10 }, 
     { wch: 25 }, 
