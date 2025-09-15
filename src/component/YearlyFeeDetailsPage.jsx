@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import * as XLSX from 'sheetjs-style'; // Use sheetjs-style for styling
+import * as XLSX from 'sheetjs-style';
 
 // Self-contained components and functions to resolve import errors
 const FaArrowLeft = () => <span>⬅️</span>;
@@ -52,38 +52,34 @@ const CustomModal = ({ title, open, onCancel, onOk, okText, children }) => {
   );
 };
 
-const StudentFormModal = ({ students, modalVisible, setModalVisible, editingStudent, setEditingStudent, fetchStudents }) => {
+const StudentFormModal = ({ students, modalVisible, setModalVisible, editingStudent, setEditingStudent, fetchStudents, setMessage, setIsError }) => {
   const [formData, setFormData] = useState({
     name: '', sitNo: '', gender: '', mobile: '', email: '', address: '', fees: '', date: ''
   });
   const [errors, setErrors] = useState({});
-  const [isPaid, setIsPaid] = useState(false);
+  const [availableSits, setAvailableSits] = useState([]);
 
   useEffect(() => {
+    const usedSits = new Set(students.map(s => s.sitNo));
+    const allPossibleSits = Array.from({ length: 100 }, (_, i) => i + 1);
+    const sitsToDisplay = allPossibleSits.filter(sit => !usedSits.has(sit));
+    
+    setAvailableSits(sitsToDisplay);
+
     if (editingStudent) {
       const formattedDate = editingStudent.date ? new Date(editingStudent.date).toISOString().split('T')[0] : '';
-      
       setFormData({
         ...editingStudent,
         date: formattedDate,
       });
 
-      const { selectedYear, selectedMonth } = editingStudent;
-      if (selectedYear && selectedMonth && editingStudent.year_month && editingStudent.year_month[selectedYear]) {
-        const monthData = editingStudent.year_month[selectedYear].months[selectedMonth];
-        if (monthData) {
-          setIsPaid(monthData.paid > 0);
-        } else {
-          setIsPaid(false);
-        }
-      } else {
-        setIsPaid(false);
+      if (!sitsToDisplay.includes(editingStudent.sitNo)) {
+        setAvailableSits(prev => [...prev, editingStudent.sitNo].sort((a, b) => a - b));
       }
     } else {
       setFormData({ name: '', sitNo: '', gender: '', mobile: '', email: '', address: '', fees: '', date: '' });
-      setIsPaid(false);
     }
-  }, [editingStudent]);
+  }, [editingStudent, students]);
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
@@ -97,51 +93,30 @@ const StudentFormModal = ({ students, modalVisible, setModalVisible, editingStud
       sitNo: Number(formData.sitNo),
       fees: Number(formData.fees),
     };
-    
-    if (!editingStudent) {
-      const dateToUse = new Date(formData.date);
-      const isDateValid = !isNaN(dateToUse.getTime());
-      
-      const admissionYear = (isDateValid ? dateToUse.getFullYear() : new Date().getFullYear()).toString();
-      const admissionMonth = (isDateValid ? dateToUse.toLocaleString('default', { month: 'short' }) : new Date().toLocaleString('default', { month: 'short' })).toLowerCase();
-      
-      data.year_month = {
-        [admissionYear]: {
-          months: {
-            [admissionMonth]: {
-              value: Number(formData.fees), 
-              paid: 0, 
-            }
-          }
-        }
-      };
-
-    }
-    
-    if (editingStudent) {
-      const yearToUpdate = editingStudent.selectedYear || new Date().getFullYear().toString();
-      const monthToUpdate = editingStudent.selectedMonth || new Date().toLocaleString('default', { month: 'short' }).toLowerCase();
-      
-      data.year_month = {
-        [yearToUpdate]: {
-          months: {
-            [monthToUpdate]: {
-              value: 1,
-              paid: isPaid ? 1 : 0
-            }
-          }
-        }
-      };
-      
-    }
-
-    console.log("Sending data to server:", data);
 
     try {
       if (editingStudent) {
-        await axios.put(`https://bonde-backend-navy.vercel.app/api/students/update/${editingStudent.sitNo}`, { year_month: data.year_month });
+        await axios.put(`https://bonde-backend-navy.vercel.app/api/students/update/${editingStudent.sitNo}`, data);
+        setMessage('Student details updated successfully! 👍');
+        setIsError(false);
       } else {
+        const dateToUse = new Date(formData.date);
+        const admissionYear = dateToUse.getFullYear().toString();
+        const admissionMonth = dateToUse.toLocaleString('default', { month: 'short' }).toLowerCase();
+        
+        data.year_month = {
+          [admissionYear]: {
+            months: {
+              [admissionMonth]: {
+                value: Number(formData.fees),
+                paid: 0,
+              }
+            }
+          }
+        };
         await axios.post('https://bonde-backend-navy.vercel.app/api/students/create', data);
+        setMessage('New student created successfully! 🎉');
+        setIsError(false);
       }
       fetchStudents();
       setModalVisible(false);
@@ -149,12 +124,14 @@ const StudentFormModal = ({ students, modalVisible, setModalVisible, editingStud
       setEditingStudent(null);
     } catch (err) {
       console.error('Server error:', err);
+      setMessage('Failed to create/update student. Please try again. 😟');
+      setIsError(true);
     }
   };
 
   return (
     <CustomModal
-      title={editingStudent ? 'Edit Student' : 'Add Student'}
+      title={editingStudent ? 'Edit Student Details' : 'Add New Student'}
       open={modalVisible}
       onCancel={() => { setModalVisible(false); setEditingStudent(null); setErrors({}); }}
       onOk={onFinish}
@@ -168,15 +145,22 @@ const StudentFormModal = ({ students, modalVisible, setModalVisible, editingStud
               <div className="px-3 text-gray-400"><FaUser /></div>
               <input type="text" id="name" name="name" value={formData.name} onChange={handleFormChange} placeholder="Enter full name" className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0" required />
             </div>
-            {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
           </div>
           <div className="relative">
             <label htmlFor="sitNo" className="block text-sm font-medium text-gray-700 mb-1">Sit No</label>
             <div className={`flex items-center border rounded-md shadow-sm focus-within:ring-2 focus-within:ring-blue-500 ${errors.sitNo ? 'border-red-500' : 'border-gray-300'}`}>
               <div className="px-3 text-gray-400"><FaIdCard /></div>
-              <input type="number" id="sitNo" name="sitNo" value={formData.sitNo} onChange={handleFormChange} placeholder="Enter unique sit number" className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0" disabled={!!editingStudent} required />
+              {editingStudent ? (
+                <input type="number" id="sitNo" name="sitNo" value={formData.sitNo} disabled className="flex-1 block w-full px-4 py-2 bg-gray-100 rounded-md text-gray-900 border-none focus:ring-0 cursor-not-allowed" />
+              ) : (
+                <select id="sitNo" name="sitNo" value={formData.sitNo} onChange={handleFormChange} className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0 appearance-none" required>
+                  <option value="">Select Sit Number</option>
+                  {availableSits.map(sit => (
+                    <option key={sit} value={sit}>{sit}</option>
+                  ))}
+                </select>
+              )}
             </div>
-            {errors.sitNo && <p className="text-red-500 text-sm mt-1">{errors.sitNo}</p>}
           </div>
           <div className="relative">
             <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
@@ -188,7 +172,6 @@ const StudentFormModal = ({ students, modalVisible, setModalVisible, editingStud
                 <option value="Female">Female</option>
               </select>
             </div>
-            {errors.gender && <p className="text-red-500 text-sm mt-1">{errors.gender}</p>}
           </div>
           <div className="relative">
             <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
@@ -196,7 +179,6 @@ const StudentFormModal = ({ students, modalVisible, setModalVisible, editingStud
               <div className="px-3 text-gray-400"><FaPhone /></div>
               <input type="text" id="mobile" name="mobile" value={formData.mobile} onChange={handleFormChange} placeholder="e.g., 123-456-7890" className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0" required />
             </div>
-            {errors.mobile && <p className="text-red-500 text-sm mt-1">{errors.mobile}</p>}
           </div>
           <div className="relative">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -204,7 +186,6 @@ const StudentFormModal = ({ students, modalVisible, setModalVisible, editingStud
               <div className="px-3 text-gray-400"><FaEnvelope /></div>
               <input type="email" id="email" name="email" value={formData.email} onChange={handleFormChange} placeholder="e.g., johndoe@example.com" className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0" required />
             </div>
-            {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
           </div>
           <div className="relative col-span-1 sm:col-span-2">
             <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">Address</label>
@@ -212,67 +193,34 @@ const StudentFormModal = ({ students, modalVisible, setModalVisible, editingStud
               <div className="p-3 text-gray-400"><FaMapMarkerAlt /></div>
               <textarea id="address" name="address" rows="3" value={formData.address} onChange={handleFormChange} placeholder="Enter student's address" className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0" required></textarea>
             </div>
-            {errors.address && <p className="text-red-500 text-sm mt-1">{errors.address}</p>}
-          </div>
-          <div className="relative">
-            <label htmlFor="fees" className="block text-sm font-medium text-gray-700 mb-1">Fees</label>
-            <div className={`flex items-center border rounded-md shadow-sm focus-within:ring-2 focus-within:ring-blue-500 ${errors.fees ? 'border-red-500' : 'border-gray-300'}`}>
-              <div className="px-3 text-gray-400"><FaDollarSign /></div>
-              <input type="number" id="fees" name="fees" value={formData.fees} onChange={handleFormChange} placeholder="e.g., 500" className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0" required />
-            </div>
-            {errors.fees && <p className="text-red-500 text-sm mt-1">{errors.fees}</p>}
-          </div>
-          <div className="relative">
-            <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">Admission Date</label>
-            <div className={`flex items-center border rounded-md shadow-sm focus-within:ring-2 focus-within:ring-blue-500 ${errors.date ? 'border-red-500' : 'border-gray-300'}`}>
-              <div className="px-3 text-gray-400"><FaCalendarAlt /></div>
-              <input type="date" id="date" name="date" value={formData.date} onChange={handleFormChange} className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0" required />
-            </div>
-            {errors.date && <p className="text-red-500 text-sm mt-1">{errors.date}</p>}
           </div>
           
-          {editingStudent && (
-            <div className="col-span-1 sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fee Status for Current Month
-              </label>
-              <div className="flex items-center space-x-6">
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="paid"
-                    name="paidStatus"
-                    checked={isPaid}
-                    onChange={() => setIsPaid(true)}
-                    className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 focus:ring-green-500"
-                  />
-                  <label htmlFor="paid" className="ml-2 flex items-center text-sm font-medium text-gray-700 cursor-pointer">
-                    <FaCheck className="text-green-600 mr-1" /> Paid
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="unpaid"
-                    name="paidStatus"
-                    checked={!isPaid}
-                    onChange={() => setIsPaid(false)}
-                    className="w-4 h-4 text-red-600 bg-gray-100 border-gray-300 focus:ring-red-500"
-                  />
-                  <label htmlFor="unpaid" className="ml-2 flex items-center text-sm font-medium text-gray-700 cursor-pointer">
-                    <FaTimes className="text-red-600 mr-1" /> Unpaid
-                  </label>
+          {!editingStudent && (
+            <>
+              <div className="relative">
+                <label htmlFor="fees" className="block text-sm font-medium text-gray-700 mb-1">Fees</label>
+                <div className={`flex items-center border rounded-md shadow-sm focus-within:ring-2 focus-within:ring-blue-500 ${errors.fees ? 'border-red-500' : 'border-gray-300'}`}>
+                  <div className="px-3 text-gray-400"><FaDollarSign /></div>
+                  <input type="number" id="fees" name="fees" value={formData.fees} onChange={handleFormChange} placeholder="e.g., 500" className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0" required />
                 </div>
               </div>
-            </div>
+              <div className="relative">
+                <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">Admission Date</label>
+                <div className={`flex items-center border rounded-md shadow-sm focus-within:ring-2 focus-within:ring-blue-500 ${errors.date ? 'border-red-500' : 'border-gray-300'}`}>
+                  <div className="px-3 text-gray-400"><FaCalendarAlt /></div>
+                  <input type="date" id="date" name="date" value={formData.date} onChange={handleFormChange} className="flex-1 block w-full px-4 py-2 bg-white rounded-md text-gray-900 border-none focus:ring-0" required />
+                </div>
+              </div>
+            </>
           )}
+
         </div>
       </form>
     </CustomModal>
   );
 };
 
-const StudentTable = ({ students, fetchStudents, setEditingStudent, setModalVisible }) => {
+const StudentTable = ({ students, fetchStudents, setEditingStudent, setModalVisible, handleUpdateFeeStatus }) => {
   if (students.length === 0) {
     return (
       <p className="text-center text-gray-500 mt-6">
@@ -294,6 +242,13 @@ const StudentTable = ({ students, fetchStudents, setEditingStudent, setModalVisi
       } catch (err) {
         console.error('Error deleting student:', err);
       }
+    }
+  };
+
+  const handleStatusToggle = (student) => {
+    const currentStatus = student.year_month?.[student.selectedYear]?.months?.[student.selectedMonth];
+    if (currentStatus) {
+      handleUpdateFeeStatus(student.sitNo, currentStatus);
     }
   };
 
@@ -323,9 +278,12 @@ const StudentTable = ({ students, fetchStudents, setEditingStudent, setModalVisi
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.gender}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.feesForMonth?.value || 'N/A'}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm">
-                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${student.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                <button
+                  onClick={() => handleStatusToggle(student)}
+                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full transition-colors duration-200 ${student.status === 'paid' ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-red-100 text-red-800 hover:bg-red-200'}`}
+                >
                   {student.status ? student.status.charAt(0).toUpperCase() + student.status.slice(1) : 'N/A'}
-                </span>
+                </button>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex items-center space-x-2">
                 <button
@@ -349,9 +307,6 @@ const StudentTable = ({ students, fetchStudents, setEditingStudent, setModalVisi
   );
 };
 
-// ** UPDATED exportToExcel function **
-// NOTE: This function requires the 'sheetjs-style' library, not 'xlsx'.
-// To use, run `npm install sheetjs-style`.
 const exportToExcel = (data, fileName, selectedMonth, selectedYear) => {
   if (!data || data.length === 0) {
     console.log("No data to export.");
@@ -360,11 +315,9 @@ const exportToExcel = (data, fileName, selectedMonth, selectedYear) => {
 
   const worksheet = XLSX.utils.json_to_sheet([]);
   
-  // 1. Add the centered title at the top
   const title = `Student Fee Details for ${selectedMonth.charAt(0).toUpperCase() + selectedMonth.slice(1)} ${selectedYear}`;
   XLSX.utils.sheet_add_aoa(worksheet, [[title]], { origin: "A1" });
   
-  // Define the style for the title cell (A1)
   const titleCell = worksheet["A1"];
   if (titleCell) {
     titleCell.s = {
@@ -373,7 +326,6 @@ const exportToExcel = (data, fileName, selectedMonth, selectedYear) => {
     };
   }
 
-  // 2. Add headers and data starting from the third row (A3)
   const excelData = data.map(student => ({
     "Sit No": student.sitNo,
     "Name": student.name,
@@ -389,12 +341,10 @@ const exportToExcel = (data, fileName, selectedMonth, selectedYear) => {
   XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: "A3" });
   XLSX.utils.sheet_add_json(worksheet, excelData, { origin: "A4", skipHeader: true });
 
-  // 3. Merge cells for the title
   const lastCol = String.fromCharCode('A'.charCodeAt(0) + headers.length - 1);
   if (!worksheet['!merges']) worksheet['!merges'] = [];
   worksheet['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } });
 
-  // 4. Set column widths
   worksheet['!cols'] = [
     { wch: 10 }, 
     { wch: 25 }, 
@@ -419,14 +369,39 @@ const YearlyFeeDetailsPage = (prevObj) => {
   const [newFeeYear, setNewFeeYear] = useState('');
   const [newFeeMonth, setNewFeeMonth] = useState('');
   const [addFeesMessage, setAddFeesMessage] = useState('');
+  const [studentMessage, setStudentMessage] = useState(''); // New state for student form messages
+  const [isError, setIsError] = useState(false); // New state for message type
   
   const [modalVisible, setModalVisible] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
 
   const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sept', 'oct', 'nov', 'dec'];
 
-  
-  const fetchStudents = async () => {
+  // This is the filtering function, memoized with useCallback
+  const updateFilteredStudents = useCallback((studentsData, year, month) => {
+    if (year && month && studentsData.length > 0) {
+      const monthKey = month.toLowerCase();
+      const filteredAndMappedStudents = studentsData
+        .filter(student => student.year_month?.[year]?.months?.[monthKey])
+        .map(student => {
+          const monthData = student.year_month[year].months[monthKey];
+          const feesForMonth = monthData?.value || 'N/A';
+          const status = monthData.paid === 1 ? 'paid' : 'unpaid';
+          return {
+            ...student,
+            feesForMonth: { value: feesForMonth, paid: monthData.paid },
+            status: status,
+            selectedYear: year,
+            selectedMonth: month,
+          };
+        });
+      setFilteredStudents(filteredAndMappedStudents);
+    } else {
+      setFilteredStudents([]);
+    }
+  }, []);
+
+  const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.get('https://bonde-backend-navy.vercel.app/api/students/all');
@@ -434,60 +409,48 @@ const YearlyFeeDetailsPage = (prevObj) => {
       setStudents(fetchedStudents);
       
       const allYears = [...new Set(
-        fetchedStudents.flatMap(student => {
-          if (student.year_month) {
-            return Object.keys(student.year_month);
-          }
-          return [];
-        })
+        fetchedStudents.flatMap(student => student.year_month ? Object.keys(student.year_month) : [])
       )].sort().reverse();
       setYears(allYears);
+
+      const today = new Date();
+      const currentYear = today.getFullYear().toString();
+      const currentMonth = today.toLocaleString('default', { month: 'short' }).toLowerCase();
+      
+      setSelectedYear(currentYear);
+      setSelectedMonth(currentMonth);
+      setNewFeeYear(currentYear);
+      setNewFeeMonth(currentMonth);
+      
+      updateFilteredStudents(fetchedStudents, currentYear, currentMonth);
+
     } catch (err) {
       console.error('Error fetching students:', err);
     }
     setLoading(false);
-  };
+  }, [updateFilteredStudents]);
 
-  useEffect(() => {
-    if (selectedYear && selectedMonth && students.length > 0) {
-      const monthKey = selectedMonth.toLowerCase();
-      const filteredAndMappedStudents = students
-        .filter(student => {
-          const monthData = student.year_month?.[selectedYear]?.months?.[monthKey];
-          return !!monthData;
-        })
-        .map(student => {
-          const monthData = student.year_month?.[selectedYear]?.months?.[monthKey];
-          const feesForMonth = monthData?.value || 'N/A';
-          const status = monthData ? (monthData.paid === 1 ? 'paid' : 'unpaid') : 'unpaid';
-          
-          return {
-            ...student,
-            feesForMonth: { value: feesForMonth, paid: monthData?.paid || 0 },
-            status: status,
-            selectedYear: selectedYear,
-            selectedMonth: selectedMonth,
-          };
-        });
-
-      setFilteredStudents(filteredAndMappedStudents);
-    } else {
-      setFilteredStudents([]);
-    }
-  }, [selectedYear, selectedMonth, students]);
-  
   useEffect(() => {
     fetchStudents();
-    
-    const today = new Date();
-    const currentYear = today.getFullYear().toString();
-    const currentMonth = today.toLocaleString('default', { month: 'short' }).toLowerCase();
-    setSelectedYear(currentYear);
-    setSelectedMonth(currentMonth);
+  }, [fetchStudents]);
 
-    setNewFeeYear(currentYear);
-    setNewFeeMonth(currentMonth);
-  }, []);
+  // This effect handles changes from dropdowns only
+  useEffect(() => {
+    if (selectedYear && selectedMonth && students.length > 0) {
+      updateFilteredStudents(students, selectedYear, selectedMonth);
+    }
+  }, [selectedYear, selectedMonth, students, updateFilteredStudents]);
+  
+  // NEW useEffect to handle and clear the studentMessage
+  useEffect(() => {
+    if (studentMessage) {
+      const timer = setTimeout(() => {
+        setStudentMessage('');
+        setIsError(false);
+      }, 5000); // Message disappears after 5 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [studentMessage]);
 
   const handleAddFees = async () => {
     if (!newFeeYear || !newFeeMonth) {
@@ -498,15 +461,21 @@ const YearlyFeeDetailsPage = (prevObj) => {
     setLoading(true);
     setAddFeesMessage(`Copying last month's fees to ${newFeeMonth.charAt(0).toUpperCase() + newFeeMonth.slice(1)} ${newFeeYear}...`);
     
-    const newDate = new Date(`${newFeeYear}-${months.indexOf(newFeeMonth) + 1}-01`);
-    newDate.setMonth(newDate.getMonth() - 1);
+    const newMonthIndex = months.indexOf(newFeeMonth);
+    const newYear = parseInt(newFeeYear);
+    let fromMonthIndex = newMonthIndex - 1;
+    let fromYear = newYear;
 
-    const fromYear = newDate.getFullYear().toString();
-    const fromMonth = newDate.toLocaleString('default', { month: 'short' }).toLowerCase();
-  
+    if (fromMonthIndex < 0) {
+      fromMonthIndex = 11;
+      fromYear = newYear - 1;
+    }
+
+    const fromMonth = months[fromMonthIndex];
+    
     try {
       const payload = {
-        fromYear: fromYear,
+        fromYear: fromYear.toString(),
         fromMonth: fromMonth,
         toYear: newFeeYear,
         toMonth: newFeeMonth
@@ -540,20 +509,6 @@ const YearlyFeeDetailsPage = (prevObj) => {
     } catch (err) {
       console.error('Error updating fee status:', err);
     }
-  };
-
-  const handleEditFee = (studentId) => {
-    const studentToUpdate = students.find(s => s.sitNo === studentId);
-    if (studentToUpdate) {
-      const currentFeeStatus = studentToUpdate.year_month?.[selectedYear]?.months?.[selectedMonth];
-      if (currentFeeStatus) {
-        handleUpdateFeeStatus(studentId, currentFeeStatus);
-      }
-    }
-  };
-
-  const handleDeleteFee = (studentId) => {
-    console.log(`Delete fee for student with ID: ${studentId}`);
   };
 
   const handleExport = () => {
@@ -610,6 +565,13 @@ const YearlyFeeDetailsPage = (prevObj) => {
 
       <hr className="my-6" />
 
+      {/* Message Display Area */}
+      {studentMessage && (
+        <div className={`mt-4 p-4 rounded-md text-center font-semibold transition-opacity duration-500 ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+          {studentMessage}
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-xl font-bold text-gray-800">View Monthly Student List</h3>
         {filteredStudents.length > 0 && (
@@ -650,7 +612,7 @@ const YearlyFeeDetailsPage = (prevObj) => {
       ) : (
         years.length === 0 ? (
           <p className="text-center text-gray-500 mt-6">
-            No fee data found. Please add fees for a year and month first using the "Set Fees for Selected Month" section above.
+            No fee data found. Please add fees for a year and month first using the "Send Student's Next Month" section above.
           </p>
         ) : (
           selectedYear && selectedMonth && (
@@ -659,19 +621,23 @@ const YearlyFeeDetailsPage = (prevObj) => {
               fetchStudents={fetchStudents}
               setEditingStudent={setEditingStudent}
               setModalVisible={setModalVisible}
+              handleUpdateFeeStatus={handleUpdateFeeStatus}
             />
           )
         )
       )}
       
-      <StudentFormModal
-        students={students}
-        modalVisible={modalVisible}
-        setModalVisible={setModalVisible}
-        editingStudent={editingStudent?{...editingStudent,selectedYear,selectedMonth}:null}
-        setEditingStudent={setEditingStudent}
-        fetchStudents={fetchStudents}
-      />
+      {/* Pass the new message setters as props */}
+ <StudentFormModal
+  modalVisible={modalVisible}
+  setModalVisible={setModalVisible}
+  editingStudent={editingStudent}
+  setEditingStudent={setEditingStudent}
+  fetchStudents={fetchStudents}
+  students={students}
+  setMessage={setStudentMessage} // <-- This is the key line
+  setIsError={setIsError}       // <-- This is also needed
+/>
     </div>
   );
 };
